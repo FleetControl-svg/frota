@@ -241,6 +241,7 @@ function renderTab(tab) {
   // Dispatcher
   const fns = {
     dashboard: renderDashboard, veiculos: renderVeiculos,
+    fretes: renderFretes, agenda: renderAgenda,
     manutencao: renderManutencao, abastec: renderAbastecimento,
     pneus: renderPneus, baterias: renderBaterias, arcond: renderArcond,
     multas: renderMultas, documentacao: renderDocumentacao,
@@ -659,7 +660,59 @@ async function excluirManutencao(mid){if(!confirm('Excluir?'))return;await SB.fr
 
 // ── COMBUSTÍVEL ──────────────────────────────────────────
 // DUP-SKIP: let aFiltro='todos',aPlaca='',aDataI='',aDataF='';
-// renderAbastecimento defined below
+function renderAbastecimento(){
+  const el2=g('tab-abastec');if(!el2)return;
+  const vF=aFiltro==='leve'?VEICULOS.filter(v=>!isPesado(v.tipo)):aFiltro==='pesado'?VEICULOS.filter(v=>isPesado(v.tipo)):VEICULOS;
+  const vIds=vF.map(v=>v.id);
+  const filtered=ABASTECIMENTOS.filter(a=>{
+    if(aFiltro!=='todos'&&!vIds.includes(a.veiculo_id))return false;
+    if(aPlaca&&(a.veiculos?.placa||'')!==aPlaca)return false;
+    if(aDataI&&a.data&&a.data<aDataI)return false;
+    if(aDataF&&a.data&&a.data>aDataF)return false;
+    return true;
+  });
+  const total=filtered.reduce((s,a)=>s+(a.valor_total||0),0);
+  const litros=filtered.reduce((s,a)=>s+(a.litros||0),0);
+  const placasU=[...new Set(ABASTECIMENTOS.map(a=>a.veiculos?.placa).filter(Boolean))].sort();
+  el2.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-weight:700;font-size:16px;color:#111827">Combustível</span>
+      <div style="display:flex;gap:6px">
+        <button onclick="abrirOCR('abastecimento')" style="background:#fff;border:1.5px solid #e5e7eb;border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit">📎 Arquivo</button>
+        <button onclick="abrirFormAbastec()" style="background:#16a34a;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ Lançar</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      ${[['todos','Todos'],['leve','🚗 Leves'],['pesado','🚛 Pesados']].map(([k,l])=>`<button onclick="aFiltro='${k}';renderAbastecimento()" style="padding:7px 12px;font-size:12px;font-weight:${aFiltro===k?700:500};border-radius:9px;border:1.5px solid ${aFiltro===k?'#1e3a5f':'#e5e7eb'};background:${aFiltro===k?'#eff6ff':'#fff'};color:${aFiltro===k?'#1e3a5f':'#6b7280'};cursor:pointer;font-family:inherit">${l}</button>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px">Data inicial</label><input type="date" value="${aDataI}" onchange="aDataI=this.value;renderAbastecimento()" style="width:100%;border:1.5px solid #e5e7eb;border-radius:9px;padding:8px;font-size:12px;outline:none;font-family:inherit"></div>
+      <div><label style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;display:block;margin-bottom:4px">Data final</label><input type="date" value="${aDataF}" onchange="aDataF=this.value;renderAbastecimento()" style="width:100%;border:1.5px solid #e5e7eb;border-radius:9px;padding:8px;font-size:12px;outline:none;font-family:inherit"></div>
+    </div>
+    <div style="display:flex;gap:7px;margin-bottom:10px;align-items:center">
+      <select onchange="aPlaca=this.value;renderAbastecimento()" style="flex:1;border:1.5px solid #e5e7eb;border-radius:9px;padding:9px 12px;font-size:12px;outline:none;background:#fff;font-family:inherit">
+        <option value="">Todas as placas</option>
+        ${placasU.map(p=>`<option value="${p}"${p===aPlaca?' selected':''}>${p}</option>`).join('')}
+      </select>
+      ${aPlaca||aDataI||aDataF?`<button onclick="aPlaca='';aDataI='';aDataF='';renderAbastecimento()" style="background:transparent;border:none;color:#dc2626;cursor:pointer;font-size:13px;font-family:inherit">✕</button>`:''}
+    </div>
+    ${filtered.length>0?`<div style="background:#f8fafc;border-radius:9px;padding:9px 13px;margin-bottom:10px;display:flex;justify-content:space-between"><span style="font-size:12px;color:#6b7280">${filtered.length} lançamentos · ${litros.toFixed(0)}L</span><span style="font-size:13px;font-weight:700;color:#111827">${fmt$(total)}</span></div>`:''}
+    ${filtered.slice(0,100).map(a=>{const v=VEICULOS.find(x=>x.id===a.veiculo_id);return`
+      <div class="card2" style="margin-bottom:8px;border-left:4px solid ${v&&isPesado(v.tipo)?'#7c3aed':'#16a34a'}">
+        <div style="padding:12px 14px;display:flex;justify-content:space-between;gap:12px">
+          <div>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+              <span style="font-weight:700;font-size:13px;color:#111827">${a.veiculos?.placa||'—'}</span>${v?badgeTipo(v.tipo):''}
+              <span style="background:#f0fdf4;color:#16a34a;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:600">${a.combustivel}</span>
+            </div>
+            <div style="font-size:11px;color:#9ca3af">${fmtD(a.data)} · ${a.litros?a.litros.toFixed(2)+'L':''} · ${a.fornecedor_nome||'—'}</div>
+            ${a.km_atual?`<div style="font-size:11px;color:#9ca3af">KM: ${a.km_atual.toLocaleString('pt-BR')}${a.os_cc?' · OS: '+a.os_cc:''}</div>`:''}
+          </div>
+          <span style="font-weight:700;font-size:14px;color:#111827;flex-shrink:0">${fmt$(a.valor_total)}</span>
+        </div>
+      </div>`}).join('')}
+    ${filtered.length===0?'<p class="empty">Nenhum lançamento</p>':''}`;
+}
 
 
 // ── RELATÓRIO ────────────────────────────────────────────
